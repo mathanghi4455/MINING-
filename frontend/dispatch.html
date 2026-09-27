@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dispatch - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">Dispatch & <span>Fleet Manager</span></div>
+        <div class="header-right">
+          <button class="btn-logout">Logout</button>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('tab-dispatches')">Active Dispatches</button>
+          <button class="tab-btn" onclick="switchTab('tab-charging')">Charge Sessions</button>
+          <button class="tab-btn" onclick="switchTab('tab-manual')">Manual Controls</button>
+        </div>
+
+        <!-- Dispatches Tab -->
+        <div id="tab-dispatches" class="tab-panel active">
+          <div class="form-row" style="gap:24px;">
+            <div class="card">
+              <div class="card-header"><div class="card-title">Create New Dispatch</div></div>
+              <div class="card-body">
+                <form id="form-dispatch" onsubmit="createDispatch(event)">
+                  <div class="form-group">
+                    <label class="form-label">Truck</label>
+                    <select id="disp-truck" class="form-control" required></select>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Origin Pit</label>
+                      <input type="text" id="disp-origin" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Destination Dump</label>
+                      <input type="text" id="disp-dest" class="form-control" required>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Tonnage (Expected)</label>
+                    <input type="number" id="disp-tonnage" class="form-control" step="0.1" required>
+                  </div>
+                  <button type="submit" class="btn btn-primary mt-16">Assign Dispatch</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><div class="card-title">Dispatch Queue</div></div>
+              <div class="card-body" style="padding:0;">
+                <div class="table-container">
+                  <table>
+                    <thead><tr><th>ID</th><th>Truck</th><th>Route</th><th>Tonnage</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="table-dispatches"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charging Tab -->
+        <div id="tab-charging" class="tab-panel">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Active & Recent Charge Sessions</div>
+              <button class="btn btn-warning btn-sm" onclick="startChargeSessionModal()">+ Start Session</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>ID</th><th>Truck</th><th>Station</th><th>Start SoC</th><th>End SoC</th><th>Energy (kWh)</th><th>Time</th><th>Actions</th></tr></thead>
+                  <tbody id="table-charges"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual Tab -->
+        <div id="tab-manual" class="tab-panel">
+          <div class="card" style="max-width:500px;">
+            <div class="card-header"><div class="card-title">Manual SoC Update</div></div>
+            <div class="card-body">
+              <form id="form-soc" onsubmit="updateSoC(event)">
+                <div class="form-group">
+                  <label class="form-label">Truck</label>
+                  <select id="soc-truck" class="form-control" required></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">New SoC %</label>
+                  <input type="number" id="soc-val" class="form-control" min="0" max="100" required>
+                </div>
+                <button type="submit" class="btn btn-danger mt-16">Force Update SoC</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-complete-charge" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Complete Charge Session</div>
+        <button class="modal-close" onclick="closeModal('modal-complete-charge')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-complete-charge" onsubmit="submitCompleteCharge(event)">
+          <input type="hidden" id="cc-id">
+          <div class="form-group">
+            <label class="form-label">End SoC %</label>
+            <input type="number" id="cc-soc" class="form-control" min="0" max="100" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Energy Delivered (kWh)</label>
+            <input type="number" id="cc-energy" class="form-control" step="0.1" required>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-complete-charge')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Complete Session</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    requireAuth();
+    initSidebar('dispatch');
+    initLogout();
+
+    let trucksCache = [];
+    let stationsCache = [];
+    let routesCache = [];
+    
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+
+    async function loadData() {
+      try {
+        const [trucks, stations, routes, dispatches, chargeSessions] = await Promise.all([
+          apiGet('/haul/trucks').catch(() => []),
+          apiGet('/haul/chargers').catch(() => []),
+          apiGet('/haul/routes').catch(() => []),
+          apiGet('/haul/dispatches').catch(() => []),
+          apiGet('/haul/charge-sessions').catch(() => [])
+        ]);
+
+        trucksCache = trucks || [];
+        stationsCache = stations || [];
+        routesCache = routes || [];
+
+        renderDispatches(dispatches || []);
+        renderChargeSessions(chargeSessions || []);
+
+        const truckOpts = trucksCache.length 
+          ? trucksCache.map(t => `<option value="${t.id}">${t.truckCode} - ${t.status} (${t.currentSoCPercent}%)</option>`).join('')
+          : '<option value="">No trucks found in DB</option>';
+
+        document.getElementById('disp-truck').innerHTML = truckOpts;
+        document.getElementById('soc-truck').innerHTML = truckOpts;
+
+      } catch(e) {
+        showToast('Failed to load dispatch data from database', 'error');
+      }
+    }
+
+    function renderDispatches(list) {
+      const tbody = document.getElementById('table-dispatches');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No dispatch records found in database.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(d => {
+        const truck = trucksCache.find(t => t.id === d.truckId);
+        const truckName = truck ? truck.truckCode : `TRK-00${d.truckId}`;
+        return `
+          <tr>
+            <td>#${d.id}</td>
+            <td><strong>${truckName}</strong></td>
+            <td>${d.originPit || '—'} &rarr; ${d.destinationDump || '—'}</td>
+            <td>${d.tonnageMoved != null ? d.tonnageMoved + ' t' : '—'}</td>
+            <td>${statusBadge(d.status)}</td>
+            <td>
+              ${d.status === 'IN_PROGRESS' ? `<button class="btn btn-success btn-xs" onclick="completeDispatch(${d.id})">Complete</button>` : '<span class="text-muted">—</span>'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderChargeSessions(list) {
+      const tbody = document.getElementById('table-charges');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No charge sessions found in database.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(c => {
+        const truck = trucksCache.find(t => t.id === c.truckId);
+        const station = stationsCache.find(s => s.id === c.stationId);
+        const truckLabel = truck ? truck.truckCode : `TRK-00${c.truckId}`;
+        const stationLabel = station ? station.stationCode : `CS-00${c.stationId}`;
+        return `
+          <tr>
+            <td>#${c.id}</td>
+            <td><strong>${truckLabel}</strong></td>
+            <td>${stationLabel}</td>
+            <td>${c.startSoC != null ? c.startSoC + '%' : '—'}</td>
+            <td>${c.endSoC != null ? c.endSoC + '%' : '—'}</td>
+            <td>${c.energyDeliveredKwh != null ? c.energyDeliveredKwh + ' kWh' : '—'}</td>
+            <td>${formatDateTime(c.startTime)}</td>
+            <td>
+              ${!c.endTime ? `<button class="btn btn-warning btn-xs" onclick="openCompleteCharge(${c.id})">Stop Charge</button>` : `<span class="text-emerald">Done</span>`}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function createDispatch(e) {
+      e.preventDefault();
+      const truckIdVal = document.getElementById('disp-truck').value;
+      if (!truckIdVal) {
+        showToast('Please select a valid truck from the database', 'warning');
+        return;
+      }
+      const payload = {
+        truckId: parseInt(truckIdVal, 10),
+        routeId: routesCache.length ? routesCache[0].id : null,
+        originPit: document.getElementById('disp-origin').value,
+        destinationDump: document.getElementById('disp-dest').value,
+        tonnageMoved: parseFloat(document.getElementById('disp-tonnage').value),
+      };
+      try {
+        await apiPost('/haul/dispatches', payload);
+        showToast('Dispatch successfully saved to database', 'success');
+        document.getElementById('form-dispatch').reset();
+        loadData();
+      } catch(err) {
+        showToast('Failed to create dispatch: ' + (err.message || 'Database error'), 'error');
+      }
+    }
+
+    async function completeDispatch(id) {
+      try {
+        await apiPost(`/haul/dispatches/${id}/complete`, {});
+        showToast('Dispatch completed in database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to complete dispatch: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    function openCompleteCharge(id) {
+      document.getElementById('cc-id').value = id;
+      openModal('modal-complete-charge');
+    }
+
+    async function submitCompleteCharge(e) {
+      e.preventDefault();
+      const id = document.getElementById('cc-id').value;
+      const endSoC = parseFloat(document.getElementById('cc-soc').value);
+      const energy = parseFloat(document.getElementById('cc-energy').value);
+      try {
+        await apiPost(`/haul/charge-sessions/${id}/complete`, {
+          endSoC: endSoC,
+          energyDeliveredKwh: energy
+        });
+        closeModal('modal-complete-charge');
+        showToast('Charge session completed in database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to complete charge session: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function updateSoC(e) {
+      e.preventDefault();
+      const id = document.getElementById('soc-truck').value;
+      const soc = parseFloat(document.getElementById('soc-val').value);
+      if (!id) {
+        showToast('Please select a truck', 'warning');
+        return;
+      }
+      try {
+        await apiPost(`/haul/trucks/${id}/update-soc`, { soCPercent: soc });
+        showToast('Truck SoC updated in database', 'success');
+        document.getElementById('soc-val').value = '';
+        loadData();
+      } catch(err) {
+        showToast('Failed to update SoC in database: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

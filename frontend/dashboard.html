@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">Fleet <span>Dashboard</span></div>
+        <div class="header-right">
+          <div id="clock" class="clock">00:00:00</div>
+          <button class="btn-logout">Logout</button>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Total Trucks</div>
+            <div class="metric-value cyan" id="kpi-total">0</div>
+            <div class="metric-sub">Active fleet</div>
+            <div class="metric-icon">🚛</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Hauling</div>
+            <div class="metric-value emerald" id="kpi-hauling">0</div>
+            <div class="metric-sub">Currently on route</div>
+            <div class="metric-icon">🛣️</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Charging / En Route</div>
+            <div class="metric-value amber" id="kpi-charging">0</div>
+            <div class="metric-sub">At stations</div>
+            <div class="metric-icon">⚡</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Avg Fleet SoC</div>
+            <div class="metric-value" id="kpi-soc">0%</div>
+            <div class="metric-sub">Overall battery health</div>
+            <div class="metric-icon">🔋</div>
+          </div>
+        </div>
+
+        <div class="section-header mt-16">
+          <div>
+            <div class="section-title">Fleet Telemetry</div>
+            <div class="section-subtitle">Real-time truck status and SoC</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="loadData()">⟳ Refresh</button>
+        </div>
+        
+        <div class="truck-grid" id="truck-grid">
+          <!-- Trucks will be injected here -->
+        </div>
+
+        <div class="form-row" style="gap: 24px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Charging Infrastructure</div></div>
+            <div class="card-body">
+              <div class="station-grid" id="station-grid">
+                <!-- Stations will be injected here -->
+              </div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header"><div class="card-title">Recent Dispatches</div></div>
+            <div class="card-body" style="padding: 0;">
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Truck</th>
+                      <th>Route</th>
+                      <th>Tonnage</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dispatch-table">
+                    <!-- Dispatches will be injected here -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    requireAuth();
+    initSidebar('dashboard');
+    initClock();
+    initLogout();
+
+    async function loadData() {
+      try {
+        const [trucks, stations, dispatches] = await Promise.all([
+          apiGet('/haul/trucks').catch(() => []),
+          apiGet('/haul/chargers').catch(() => []),
+          apiGet('/haul/dispatches').catch(() => [])
+        ]);
+
+        const truckList = trucks || [];
+        const stationList = stations || [];
+        const dispatchList = dispatches || [];
+
+        // Update KPIs directly from Database data
+        document.getElementById('kpi-total').textContent = truckList.length;
+        document.getElementById('kpi-hauling').textContent = truckList.filter(t => t.status === 'HAULING').length;
+        document.getElementById('kpi-charging').textContent = truckList.filter(t => ['CHARGING', 'EN_ROUTE_TO_CHARGE'].includes(t.status)).length;
+        const avgSoC = truckList.length ? (truckList.reduce((acc, t) => acc + (t.currentSoCPercent || 0), 0) / truckList.length) : 0;
+        document.getElementById('kpi-soc').textContent = avgSoC.toFixed(1) + '%';
+        
+        // Render Trucks from Database
+        const truckGridEl = document.getElementById('truck-grid');
+        if (truckList.length === 0) {
+          truckGridEl.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p class="text-muted">No trucks registered in database.</p></div>';
+        } else {
+          truckGridEl.innerHTML = truckList.map(t => `
+            <div class="truck-card">
+              <div class="truck-card-header">
+                <div>
+                  <div class="truck-code">${t.truckCode}</div>
+                  <div class="truck-model">${t.model}</div>
+                </div>
+                ${statusBadge(t.status)}
+              </div>
+              <div class="truck-body">
+                ${createSoCGauge(t.currentSoCPercent, 80)}
+                <div class="truck-info">
+                  <div class="truck-detail">Capacity: <strong>${t.batteryCapacityKwh} kWh</strong></div>
+                  <div class="truck-detail">Lat: <strong>${t.currentLat != null ? t.currentLat.toFixed(4) : '—'}</strong></div>
+                  <div class="truck-detail">Lng: <strong>${t.currentLng != null ? t.currentLng.toFixed(4) : '—'}</strong></div>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Render Stations from Database
+        const stationGridEl = document.getElementById('station-grid');
+        if (stationList.length === 0) {
+          stationGridEl.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p class="text-muted">No charging stations registered in database.</p></div>';
+        } else {
+          stationGridEl.innerHTML = stationList.map(s => `
+            <div class="station-card">
+              <div class="station-icon">⚡</div>
+              <div class="station-name">${s.name} (${s.stationCode})</div>
+              <div class="station-power">${s.maxPowerKw} kW Max</div>
+              ${statusBadge(s.status)}
+            </div>
+          `).join('');
+        }
+
+        // Render Dispatches from Database
+        const dispatchTableEl = document.getElementById('dispatch-table');
+        if (dispatchList.length === 0) {
+          dispatchTableEl.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No dispatch records found in database.</td></tr>';
+        } else {
+          dispatchTableEl.innerHTML = dispatchList.slice(0, 5).map(d => {
+            const matchedTruck = truckList.find(t => t.id === d.truckId);
+            const truckLabel = matchedTruck ? matchedTruck.truckCode : `TRK-00${d.truckId}`;
+            return `
+              <tr>
+                <td><strong>${truckLabel}</strong></td>
+                <td>${d.originPit || '—'} &rarr; ${d.destinationDump || '—'}</td>
+                <td>${d.tonnageMoved != null ? d.tonnageMoved + ' t' : '—'}</td>
+                <td>${statusBadge(d.status)}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+      } catch (err) {
+        showToast('Failed to load dashboard data from database', 'error');
+      }
+    }
+
+    loadData();
+    setInterval(loadData, 30000); // Auto-refresh 30s
+  </script>
+</body>
+</html>

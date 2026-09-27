@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">Financial <span>Transactions</span></div>
+        <div class="header-right">
+          <button class="btn-logout">Logout</button>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('tab-sales')">Sales Cycle (AR)</button>
+          <button class="tab-btn" onclick="switchTab('tab-purchases')">Purchase Cycle (AP)</button>
+        </div>
+
+        <!-- Sales Tab -->
+        <div id="tab-sales" class="tab-panel active">
+          <div class="card mb-24">
+            <div class="card-header">
+              <div class="card-title">Sales Orders</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-so')">+ New SO</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>Order #</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="table-so"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header"><div class="card-title">Customer Invoices</div></div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>Invoice #</th><th>Customer</th><th>Due Date</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="table-inv"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Purchases Tab -->
+        <div id="tab-purchases" class="tab-panel">
+          <div class="card mb-24">
+            <div class="card-header">
+              <div class="card-title">Purchase Orders</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-po')">+ New PO</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>PO #</th><th>Vendor</th><th>Date</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="table-po"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Vendor Bills</div></div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>Bill #</th><th>Vendor</th><th>Due Date</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="table-bills"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- SO Modal -->
+  <div id="modal-so" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Sales Order</div>
+        <button class="modal-close" onclick="closeModal('modal-so')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-so" onsubmit="createSalesOrder(event)">
+          <div class="form-group">
+            <label class="form-label">Customer</label>
+            <select id="so-customer" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Product / Service</label>
+            <select id="so-product" class="form-control" onchange="onSoProductChange()" required></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Quantity</label>
+              <input type="number" id="so-qty" class="form-control" step="1" min="1" value="1000" oninput="calcSoTotal()" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unit Price (₹)</label>
+              <input type="number" id="so-price" class="form-control" step="0.01" min="0" oninput="calcSoTotal()" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Operating Period</label>
+            <input type="text" id="so-period" class="form-control" placeholder="e.g. 2026-Q3" value="2026-Q3" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estimated Total (₹)</label>
+            <input type="text" id="so-total" class="form-control" readonly style="opacity:0.8;font-weight:700;">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-so')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- PO Modal -->
+  <div id="modal-po" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Purchase Order</div>
+        <button class="modal-close" onclick="closeModal('modal-po')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-po" onsubmit="createPurchaseOrder(event)">
+          <div class="form-group">
+            <label class="form-label">Vendor</label>
+            <select id="po-vendor" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Goods / Service</label>
+            <select id="po-product" class="form-control" onchange="onPoProductChange()" required></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Quantity</label>
+              <input type="number" id="po-qty" class="form-control" step="1" min="1" value="1" oninput="calcPoTotal()" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unit Price (₹)</label>
+              <input type="number" id="po-price" class="form-control" step="0.01" min="0" oninput="calcPoTotal()" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Total Amount (₹)</label>
+            <input type="text" id="po-total" class="form-control" readonly style="opacity:0.8;font-weight:700;">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-po')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    requireAuth();
+    initSidebar('finance');
+    initLogout();
+
+    let contactsCache = [];
+    let productsCache = [];
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+
+    async function loadData() {
+      try {
+        const [contacts, products, sos, invoices, pos, bills] = await Promise.all([
+          apiGet('/contacts').catch(() => []),
+          apiGet('/products').catch(() => []),
+          apiGet('/sales-orders').catch(() => []),
+          apiGet('/customer-invoices').catch(() => []),
+          apiGet('/purchase-orders').catch(() => []),
+          apiGet('/vendor-bills').catch(() => [])
+        ]);
+
+        contactsCache = contacts || [];
+        productsCache = products || [];
+
+        renderDropdowns();
+        renderSalesOrders(sos || []);
+        renderCustomerInvoices(invoices || []);
+        renderPurchaseOrders(pos || []);
+        renderVendorBills(bills || []);
+
+      } catch(e) {
+        showToast('Failed to load financial records from database', 'error');
+      }
+    }
+
+    function renderDropdowns() {
+      const customers = contactsCache.filter(c => c.type === 'CUSTOMER');
+      const vendors = contactsCache.filter(c => c.type === 'VENDOR');
+
+      const custSelect = document.getElementById('so-customer');
+      if (custSelect) {
+        custSelect.innerHTML = customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      }
+
+      const vendSelect = document.getElementById('po-vendor');
+      if (vendSelect) {
+        vendSelect.innerHTML = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+      }
+
+      const prodSelect = document.getElementById('so-product');
+      if (prodSelect) {
+        prodSelect.innerHTML = productsCache.map(p => `<option value="${p.id}" data-price="${p.unitPrice}">${p.name} (${formatCurrency(p.unitPrice)}/${p.unitOfMeasure})</option>`).join('');
+        onSoProductChange();
+      }
+
+      const poProdSelect = document.getElementById('po-product');
+      if (poProdSelect) {
+        poProdSelect.innerHTML = productsCache.map(p => `<option value="${p.id}" data-price="${p.unitPrice}">${p.name} (${formatCurrency(p.unitPrice)}/${p.unitOfMeasure})</option>`).join('');
+        onPoProductChange();
+      }
+    }
+
+    function onSoProductChange() {
+      const sel = document.getElementById('so-product');
+      const opt = sel.options[sel.selectedIndex];
+      if (opt) {
+        const price = opt.getAttribute('data-price') || '0';
+        document.getElementById('so-price').value = parseFloat(price).toFixed(2);
+        calcSoTotal();
+      }
+    }
+
+    function calcSoTotal() {
+      const qty = parseFloat(document.getElementById('so-qty').value) || 0;
+      const price = parseFloat(document.getElementById('so-price').value) || 0;
+      document.getElementById('so-total').value = formatCurrency(qty * price);
+    }
+
+    function onPoProductChange() {
+      const sel = document.getElementById('po-product');
+      const opt = sel.options[sel.selectedIndex];
+      if (opt) {
+        const price = opt.getAttribute('data-price') || '0';
+        document.getElementById('po-price').value = parseFloat(price).toFixed(2);
+        calcPoTotal();
+      }
+    }
+
+    function calcPoTotal() {
+      const qty = parseFloat(document.getElementById('po-qty').value) || 0;
+      const price = parseFloat(document.getElementById('po-price').value) || 0;
+      document.getElementById('po-total').value = formatCurrency(qty * price);
+    }
+
+    function renderSalesOrders(list) {
+      const tbody = document.getElementById('table-so');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No sales orders found in database.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(so => {
+        const customer = contactsCache.find(c => c.id === so.customerId);
+        const custName = customer ? customer.name : `Customer #${so.customerId}`;
+        let actionBtn = '';
+        if (so.status === 'DRAFT') {
+          actionBtn = `<button class="btn btn-xs btn-primary" onclick="confirmSO(${so.id})">Confirm</button>`;
+        } else if (so.status === 'CONFIRMED') {
+          actionBtn = `<button class="btn btn-xs btn-success" onclick="convertSOToInvoice(${so.id})">Create Invoice</button>`;
+        } else {
+          actionBtn = '<span class="text-muted">—</span>';
+        }
+        return `
+          <tr>
+            <td><strong>SO-${so.id}</strong></td>
+            <td>${custName}</td>
+            <td>${formatDate(so.createdAt)}</td>
+            <td>${formatCurrency(so.totalAmount)}</td>
+            <td>${statusBadge(so.status)}</td>
+            <td>${actionBtn}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderCustomerInvoices(list) {
+      const tbody = document.getElementById('table-inv');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No customer invoices found in database.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(inv => {
+        const customer = contactsCache.find(c => c.id === inv.customerId);
+        const custName = customer ? customer.name : `Customer #${inv.customerId}`;
+        const canPay = inv.status === 'OPEN';
+        return `
+          <tr>
+            <td><strong>INV-${inv.id}</strong></td>
+            <td>${custName}</td>
+            <td>${formatDate(inv.dueDate)}</td>
+            <td>${formatCurrency(inv.amount)}</td>
+            <td>${statusBadge(inv.status)}</td>
+            <td>
+              ${canPay ? `<button class="btn btn-xs btn-primary" onclick="collectPayment(${inv.id}, ${inv.amount})">Register Payment</button>` : '<span class="text-emerald">Paid</span>'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderPurchaseOrders(list) {
+      const tbody = document.getElementById('table-po');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No purchase orders found in database.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(po => {
+        const vendor = contactsCache.find(c => c.id === po.vendorId);
+        const vendName = vendor ? vendor.name : `Vendor #${po.vendorId}`;
+        let actionBtn = '';
+        if (po.status === 'DRAFT') {
+          actionBtn = `<button class="btn btn-xs btn-primary" onclick="confirmPO(${po.id})">Confirm</button>`;
+        } else if (po.status === 'CONFIRMED') {
+          actionBtn = `<button class="btn btn-xs btn-success" onclick="convertPOToBill(${po.id})">Convert to Bill</button>`;
+        } else {
+          actionBtn = '<span class="text-muted">—</span>';
+        }
+        return `
+          <tr>
+            <td><strong>PO-${po.id}</strong></td>
+            <td>${vendName}</td>
+            <td>${formatDate(po.createdAt)}</td>
+            <td>${formatCurrency(po.totalAmount)}</td>
+            <td>${statusBadge(po.status)}</td>
+            <td>${actionBtn}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderVendorBills(list) {
+      const tbody = document.getElementById('table-bills');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No vendor bills found in database.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(bill => {
+        const vendor = contactsCache.find(c => c.id === bill.vendorId);
+        const vendName = vendor ? vendor.name : `Vendor #${bill.vendorId}`;
+        const canPay = bill.status === 'OPEN';
+        return `
+          <tr>
+            <td><strong>BILL-${bill.id}</strong></td>
+            <td>${vendName}</td>
+            <td>${formatDate(bill.dueDate)}</td>
+            <td>${formatCurrency(bill.amount)}</td>
+            <td>${statusBadge(bill.status)}</td>
+            <td>
+              ${canPay ? `<button class="btn btn-xs btn-warning" onclick="payBill(${bill.id}, ${bill.amount})">Pay Bill</button>` : '<span class="text-emerald">Paid</span>'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function createSalesOrder(e) {
+      e.preventDefault();
+      const payload = {
+        customerId: parseInt(document.getElementById('so-customer').value, 10),
+        productId: parseInt(document.getElementById('so-product').value, 10),
+        qty: parseFloat(document.getElementById('so-qty').value),
+        unitPrice: parseFloat(document.getElementById('so-price').value),
+        period: document.getElementById('so-period').value
+      };
+      try {
+        await apiPost('/sales-orders', payload);
+        closeModal('modal-so');
+        document.getElementById('form-so').reset();
+        showToast('Sales Order created in database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to create Sales Order: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function confirmSO(id) {
+      try {
+        await apiPost(`/sales-orders/${id}/confirm`, {});
+        showToast(`Sales Order #${id} confirmed in database`, 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to confirm SO: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function convertSOToInvoice(id) {
+      try {
+        await apiPost(`/sales-orders/${id}/convert-to-invoice`, {});
+        showToast(`Customer invoice created in database for SO #${id}`, 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to generate invoice: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function collectPayment(id, amount) {
+      try {
+        await apiPost(`/customer-invoices/${id}/collect-payment`, {
+          amount: amount,
+          paymentDate: new Date().toISOString().split('T')[0],
+          method: 'BANK',
+          notes: 'Customer settlement recorded'
+        });
+        showToast(`Payment of ${formatCurrency(amount)} collected in database`, 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to record payment: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function createPurchaseOrder(e) {
+      e.preventDefault();
+      const payload = {
+        vendorId: parseInt(document.getElementById('po-vendor').value, 10),
+        productId: parseInt(document.getElementById('po-product').value, 10),
+        qty: parseFloat(document.getElementById('po-qty').value),
+        unitPrice: parseFloat(document.getElementById('po-price').value)
+      };
+      try {
+        await apiPost('/purchase-orders', payload);
+        closeModal('modal-po');
+        document.getElementById('form-po').reset();
+        showToast('Purchase Order created in database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to create Purchase Order: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function confirmPO(id) {
+      try {
+        await apiPost(`/purchase-orders/${id}/confirm`, {});
+        showToast(`Purchase Order #${id} confirmed in database`, 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to confirm PO: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function convertPOToBill(id) {
+      try {
+        await apiPost(`/purchase-orders/${id}/convert-to-bill`, {});
+        showToast(`Vendor Bill generated in database for PO #${id}`, 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to convert PO to Bill: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    async function payBill(id, amount) {
+      try {
+        await apiPost(`/vendor-bills/${id}/pay`, {
+          amount: amount,
+          paymentDate: new Date().toISOString().split('T')[0],
+          method: 'BANK',
+          notes: 'Supplier payment recorded'
+        });
+        showToast(`Vendor bill #${id} marked as paid in database`, 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to record bill payment: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

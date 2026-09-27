@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budgets - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">Analytic <span>Budgets</span></div>
+        <div class="header-right">
+          <button class="btn-logout">Logout</button>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        
+        <div class="section-header">
+          <div>
+            <div class="section-title">Budget Lines</div>
+            <div class="section-subtitle">Track planned vs actuals from database across cost centers</div>
+          </div>
+          <div class="flex-center gap-12">
+            <button class="btn btn-secondary" onclick="openModal('modal-analytic')">+ Analytic Cost Center</button>
+            <button class="btn btn-primary" onclick="openModal('modal-budget')">+ New Budget Line</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body" style="padding:0;">
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Analytic Account</th>
+                    <th>GL Account</th>
+                    <th>Period</th>
+                    <th class="text-right">Planned Amt</th>
+                    <th class="text-right">Actual Amt</th>
+                    <th class="text-right">Variance</th>
+                  </tr>
+                </thead>
+                <tbody id="table-budgets"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Budget Modal -->
+  <div id="modal-budget" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Budget Line</div>
+        <button class="modal-close" onclick="closeModal('modal-budget')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-budget" onsubmit="createBudget(event)">
+          <div class="form-group">
+            <label class="form-label">Analytic Account (Cost Center)</label>
+            <select id="bg-analytic" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">GL Account</label>
+            <select id="bg-account" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Period</label>
+            <input type="text" id="bg-period" class="form-control" placeholder="e.g. 2025-Q3 or 2026-Q3" value="2025-Q3" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Planned Amount (₹)</label>
+            <input type="number" id="bg-planned" class="form-control" step="100" min="0" placeholder="50000" required>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-budget')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analytic Account Modal -->
+  <div id="modal-analytic" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Analytic Cost Center</div>
+        <button class="modal-close" onclick="closeModal('modal-analytic')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-analytic" onsubmit="createAnalyticAccount(event)">
+          <div class="form-group">
+            <label class="form-label">Cost Center Name</label>
+            <input type="text" id="an-name" class="form-control" placeholder="e.g. Workshop Fleet Operations" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <input type="text" id="an-desc" class="form-control" placeholder="e.g. Maintenance & overhaul shop">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-analytic')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    requireAuth();
+    initSidebar('budgets');
+    initLogout();
+
+    let analyticsCache = [];
+    let accountsCache = [];
+
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+
+    async function loadData() {
+      try {
+        const [budgets, analytics, accounts] = await Promise.all([
+          apiGet('/budgets').catch(() => []),
+          apiGet('/analytic-accounts').catch(() => []),
+          apiGet('/accounts').catch(() => [])
+        ]);
+
+        analyticsCache = analytics || [];
+        accountsCache = accounts || [];
+
+        renderDropdowns();
+        await renderBudgets(budgets || []);
+
+      } catch(e) {
+        showToast('Failed to load budgets from database', 'error');
+      }
+    }
+
+    function renderDropdowns() {
+      const anSelect = document.getElementById('bg-analytic');
+      if (anSelect) {
+        anSelect.innerHTML = analyticsCache.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      }
+
+      const accSelect = document.getElementById('bg-account');
+      if (accSelect) {
+        accSelect.innerHTML = accountsCache.map(a => `<option value="${a.id}">${a.code} - ${a.name} (${a.type})</option>`).join('');
+      }
+    }
+
+    async function renderBudgets(list) {
+      const tbody = document.getElementById('table-budgets');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No budget lines configured in database.</td></tr>';
+        return;
+      }
+
+      // Fetch variance for each budget item from database
+      const rows = await Promise.all(list.map(async (b) => {
+        const analytic = analyticsCache.find(a => a.id === b.analyticAccountId);
+        const account = accountsCache.find(acc => acc.id === b.accountId);
+        const analyticName = analytic ? analytic.name : `Analytic #${b.analyticAccountId}`;
+        const accountName = account ? `${account.code} ${account.name}` : `Account #${b.accountId}`;
+
+        let actual = 0;
+        let variance = b.plannedAmount || 0;
+        try {
+          const varList = await apiGet(`/budgets/${b.id}/variance`);
+          if (varList && varList.length > 0) {
+            actual = varList[0].actualAmount || 0;
+            variance = varList[0].varianceAmount || (b.plannedAmount - actual);
+          }
+        } catch(e) {}
+
+        const varClass = variance >= 0 ? 'text-emerald' : 'text-crimson';
+        const varPrefix = variance >= 0 ? '+' : '';
+
+        return `
+          <tr>
+            <td><strong>${analyticName}</strong></td>
+            <td>${accountName}</td>
+            <td>${b.period}</td>
+            <td class="text-right">${formatCurrency(b.plannedAmount)}</td>
+            <td class="text-right">${formatCurrency(actual)}</td>
+            <td class="text-right ${varClass}">${varPrefix}${formatCurrency(variance)}</td>
+          </tr>
+        `;
+      }));
+
+      tbody.innerHTML = rows.join('');
+    }
+
+    async function createBudget(e) {
+      e.preventDefault();
+      const payload = {
+        analyticAccountId: parseInt(document.getElementById('bg-analytic').value, 10),
+        accountId: parseInt(document.getElementById('bg-account').value, 10),
+        period: document.getElementById('bg-period').value,
+        plannedAmount: parseFloat(document.getElementById('bg-planned').value)
+      };
+      try {
+        await apiPost('/budgets', payload);
+        closeModal('modal-budget');
+        document.getElementById('form-budget').reset();
+        showToast('Budget line successfully saved to database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to save budget: ' + (err.message || 'Database error'), 'error');
+      }
+    }
+
+    async function createAnalyticAccount(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('an-name').value,
+        description: document.getElementById('an-desc').value
+      };
+      try {
+        await apiPost('/analytic-accounts', payload);
+        closeModal('modal-analytic');
+        document.getElementById('form-analytic').reset();
+        showToast('Cost center created in database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to create cost center: ' + (err.message || 'Database error'), 'error');
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">Financial <span>Reports</span></div>
+        <div class="header-right">
+          <button class="btn-logout">Logout</button>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('tab-bs')">Balance Sheet</button>
+          <button class="tab-btn" onclick="switchTab('tab-pl')">Profit & Loss</button>
+        </div>
+
+        <!-- BS Tab -->
+        <div id="tab-bs" class="tab-panel active">
+          <div class="card mb-24">
+            <div class="card-body flex-center gap-12">
+              <label class="form-label" style="margin:0;">As Of Date:</label>
+              <input type="date" id="bs-date" class="form-control" style="width:200px;">
+              <button class="btn btn-primary" onclick="generateBS()">Generate from DB</button>
+            </div>
+          </div>
+          
+          <div class="form-row" style="gap:24px;">
+            <div class="card" style="flex:1.2;">
+              <div class="card-header"><div class="card-title">Balance Sheet Details (Database)</div></div>
+              <div class="card-body" style="padding:0;">
+                <div class="table-container">
+                  <table>
+                    <thead><tr><th>Account</th><th class="text-right">Balance</th></tr></thead>
+                    <tbody id="table-bs-body">
+                      <tr><td colspan="2" class="text-center text-muted">Click Generate to query database.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="flex:0.8;">
+              <div class="card-header"><div class="card-title">Asset / Liability Distribution</div></div>
+              <div class="card-body">
+                <div class="chart-container" style="height:320px;position:relative;">
+                  <canvas id="chart-bs"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PL Tab -->
+        <div id="tab-pl" class="tab-panel">
+          <div class="card mb-24">
+            <div class="card-body flex-center gap-12">
+              <label class="form-label" style="margin:0;">From:</label>
+              <input type="date" id="pl-from" class="form-control" style="width:170px;">
+              <label class="form-label" style="margin:0;">To:</label>
+              <input type="date" id="pl-to" class="form-control" style="width:170px;">
+              <button class="btn btn-primary" onclick="generatePL()">Generate P&L from DB</button>
+            </div>
+          </div>
+
+          <div class="form-row" style="gap:24px;">
+            <div class="card" style="flex:1.2;">
+              <div class="card-header"><div class="card-title">Profit &amp; Loss Statement (Database)</div></div>
+              <div class="card-body" style="padding:0;">
+                <div class="table-container">
+                  <table>
+                    <thead><tr><th>Account Category</th><th class="text-right">Amount</th></tr></thead>
+                    <tbody id="table-pl-body">
+                      <tr><td colspan="2" class="text-center text-muted">Click Generate P&L to query database.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="flex:0.8;">
+              <div class="card-header"><div class="card-title">Revenue vs Expense Comparison</div></div>
+              <div class="card-body">
+                <div class="chart-container" style="height:320px;position:relative;">
+                  <canvas id="chart-pl"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    requireAuth();
+    initSidebar('reports');
+    initLogout();
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+      if (tabId === 'tab-pl' && !plChart) {
+        generatePL();
+      }
+    }
+
+    // Default dates
+    const today = new Date().toISOString().split('T')[0];
+    const firstOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+    document.getElementById('bs-date').value = today;
+    document.getElementById('pl-from').value = firstOfYear;
+    document.getElementById('pl-to').value = today;
+
+    let bsChart = null;
+    let plChart = null;
+
+    async function generateBS() {
+      const asOf = document.getElementById('bs-date').value;
+      const tbody = document.getElementById('table-bs-body');
+      tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Loading live database records...</td></tr>';
+      
+      try {
+        const data = await apiGet(`/reports/balance-sheet?asOf=${asOf}`);
+        const assets = data.assets || [];
+        const liabilities = data.liabilities || [];
+        const equity = data.equity || [];
+
+        let html = '';
+        
+        // Assets section
+        html += `<tr><td colspan="2" class="text-muted" style="background:rgba(255,255,255,0.03);font-weight:700;">ASSETS</td></tr>`;
+        if (assets.length === 0) {
+          html += `<tr><td class="text-muted" style="padding-left:24px;">No active asset entries recorded</td><td class="text-right text-muted">$0.00</td></tr>`;
+        } else {
+          assets.forEach(a => {
+            html += `<tr><td style="padding-left:24px;">${a.accountCode} ${a.accountName}</td><td class="text-right">${formatCurrency(a.balance)}</td></tr>`;
+          });
+        }
+        html += `<tr style="font-weight:700;border-top:1px solid rgba(255,255,255,0.1);"><td>Total Assets</td><td class="text-right text-emerald">${formatCurrency(data.totalAssets || 0)}</td></tr>`;
+
+        // Liabilities section
+        html += `<tr><td colspan="2" class="text-muted" style="background:rgba(255,255,255,0.03);font-weight:700;">LIABILITIES</td></tr>`;
+        if (liabilities.length === 0) {
+          html += `<tr><td class="text-muted" style="padding-left:24px;">No active liability entries recorded</td><td class="text-right text-muted">$0.00</td></tr>`;
+        } else {
+          liabilities.forEach(l => {
+            html += `<tr><td style="padding-left:24px;">${l.accountCode} ${l.accountName}</td><td class="text-right">${formatCurrency(l.balance)}</td></tr>`;
+          });
+        }
+        html += `<tr style="font-weight:700;border-top:1px solid rgba(255,255,255,0.1);"><td>Total Liabilities</td><td class="text-right text-crimson">${formatCurrency(data.totalLiabilities || 0)}</td></tr>`;
+
+        // Equity section
+        html += `<tr><td colspan="2" class="text-muted" style="background:rgba(255,255,255,0.03);font-weight:700;">EQUITY</td></tr>`;
+        if (equity.length === 0) {
+          html += `<tr><td class="text-muted" style="padding-left:24px;">No active equity entries recorded</td><td class="text-right text-muted">$0.00</td></tr>`;
+        } else {
+          equity.forEach(e => {
+            html += `<tr><td style="padding-left:24px;">${e.accountCode} ${e.accountName}</td><td class="text-right">${formatCurrency(e.balance)}</td></tr>`;
+          });
+        }
+        html += `<tr style="font-weight:700;border-top:1px solid rgba(255,255,255,0.1);"><td>Total Equity</td><td class="text-right text-accent">${formatCurrency(data.totalEquity || 0)}</td></tr>`;
+
+        tbody.innerHTML = html;
+
+        // Render Chart
+        renderBsChart(data.totalAssets || 0, data.totalLiabilities || 0, data.totalEquity || 0);
+
+      } catch(err) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-crimson">Failed to load report from database</td></tr>';
+        showToast('Failed to load balance sheet: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    function renderBsChart(assets, liabilities, equity) {
+      const ctx = document.getElementById('chart-bs').getContext('2d');
+      if (bsChart) bsChart.destroy();
+      
+      Chart.defaults.color = '#e8eaf0';
+      Chart.defaults.font.family = 'Inter';
+
+      const hasValues = (assets > 0 || liabilities > 0 || equity > 0);
+      const chartData = hasValues ? [assets, liabilities, equity] : [1];
+      const chartColors = hasValues ? ['#00e676', '#ff5252', '#00d4ff'] : ['rgba(255,255,255,0.08)'];
+      const chartLabels = hasValues ? ['Assets', 'Liabilities', 'Equity'] : ['No DB Data'];
+
+      bsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: chartLabels,
+          datasets: [{
+            data: chartData,
+            backgroundColor: chartColors,
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' }
+          }
+        }
+      });
+    }
+
+    async function generatePL() {
+      const from = document.getElementById('pl-from').value;
+      const to = document.getElementById('pl-to').value;
+      const tbody = document.getElementById('table-pl-body');
+      tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Loading live database records...</td></tr>';
+
+      try {
+        const data = await apiGet(`/reports/profit-and-loss?from=${from}&to=${to}`);
+        const income = data.income || [];
+        const expenses = data.expenses || [];
+
+        let html = '';
+
+        // Income
+        html += `<tr><td colspan="2" class="text-muted" style="background:rgba(255,255,255,0.03);font-weight:700;">OPERATING REVENUE (INCOME)</td></tr>`;
+        if (income.length === 0) {
+          html += `<tr><td class="text-muted" style="padding-left:24px;">No income recorded in this period</td><td class="text-right text-muted">$0.00</td></tr>`;
+        } else {
+          income.forEach(i => {
+            html += `<tr><td style="padding-left:24px;">${i.accountCode} ${i.accountName}</td><td class="text-right">${formatCurrency(i.balance)}</td></tr>`;
+          });
+        }
+        html += `<tr style="font-weight:700;border-top:1px solid rgba(255,255,255,0.1);"><td>Total Income</td><td class="text-right text-emerald">${formatCurrency(data.totalIncome || 0)}</td></tr>`;
+
+        // Expenses
+        html += `<tr><td colspan="2" class="text-muted" style="background:rgba(255,255,255,0.03);font-weight:700;">OPERATING EXPENSES</td></tr>`;
+        if (expenses.length === 0) {
+          html += `<tr><td class="text-muted" style="padding-left:24px;">No expenses recorded in this period</td><td class="text-right text-muted">$0.00</td></tr>`;
+        } else {
+          expenses.forEach(e => {
+            html += `<tr><td style="padding-left:24px;">${e.accountCode} ${e.accountName}</td><td class="text-right">${formatCurrency(e.balance)}</td></tr>`;
+          });
+        }
+        html += `<tr style="font-weight:700;border-top:1px solid rgba(255,255,255,0.1);"><td>Total Expenses</td><td class="text-right text-crimson">${formatCurrency(data.totalExpenses || 0)}</td></tr>`;
+
+        // Net Profit
+        const profit = data.netProfit || 0;
+        const profitClass = profit >= 0 ? 'text-emerald' : 'text-crimson';
+        html += `<tr style="font-size:16px;font-weight:800;border-top:2px solid rgba(255,255,255,0.2);"><td>Net Profit / (Loss)</td><td class="text-right ${profitClass}">${formatCurrency(profit)}</td></tr>`;
+
+        tbody.innerHTML = html;
+
+        // Render Chart
+        renderPlChart(data.totalIncome || 0, data.totalExpenses || 0, profit);
+
+      } catch(err) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-crimson">Failed to load P&L from database</td></tr>';
+        showToast('Failed to load P&L: ' + (err.message || 'Error'), 'error');
+      }
+    }
+
+    function renderPlChart(income, expenses, netProfit) {
+      const ctx = document.getElementById('chart-pl').getContext('2d');
+      if (plChart) plChart.destroy();
+
+      Chart.defaults.color = '#e8eaf0';
+      Chart.defaults.font.family = 'Inter';
+
+      plChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Total Revenue', 'Total Expenses', 'Net Profit'],
+          datasets: [{
+            label: 'Amount (₹)',
+            data: [income, expenses, netProfit],
+            backgroundColor: ['#00e676', '#ff5252', '#00d4ff'],
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // Auto-generate Balance Sheet on load
+    generateBS();
+  </script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .login-layout {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-deep);
+    }
+    .login-left {
+      flex: 1;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0a0e17 0%, #0d1421 100%);
+    }
+    .login-right {
+      width: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border-glass);
+      z-index: 10;
+    }
+    #particles-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+    .brand-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+    .brand-content h1 {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--emerald));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+    .brand-content p {
+      font-size: 16px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+    }
+    .login-card h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .login-card p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+    .demo-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .demo-buttons .btn {
+      flex: 1;
+      justify-content: center;
+    }
+    #login-error {
+      color: var(--crimson);
+      font-size: 13px;
+      background: rgba(255,82,82,0.1);
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+      display: none;
+      border: 1px solid rgba(255,82,82,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="login-layout">
+    <div class="login-left">
+      <canvas id="particles-canvas"></canvas>
+      <div class="brand-content">
+        <h1>MINEHAULOPS</h1>
+        <p>Autonomous Electric Fleet Command</p>
+      </div>
+    </div>
+    <div class="login-right">
+      <div class="login-card">
+        <h2>Welcome Back</h2>
+        <p>Sign in to fleet control center</p>
+        
+        <div class="demo-buttons">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="fillDemo('admin','admin123')">Admin Demo</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="fillDemo('accountant','acc123')">Finance Demo</button>
+        </div>
+
+        <div id="login-error"></div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="username" class="form-control" required placeholder="Enter username">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="password" class="form-control" required placeholder="Enter password">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 16px; padding: 12px;">
+            <span id="login-text">Access System</span>
+            <span id="login-spinner" class="loading-spinner" style="display:none; width:16px; height:16px;"></span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    // Particle Animation
+    const canvas = document.getElementById('particles-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    
+    function initCanvas() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      particles = [];
+      for(let i=0; i<100; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          vx: (Math.random() - 0.5) * 1,
+          vy: (Math.random() - 0.5) * 1,
+          r: Math.random() * 2 + 1
+        });
+      }
+    }
+    
+    function drawParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+      
+      for(let i=0; i<particles.length; i++) {
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        
+        if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        
+        for(let j=i+1; j<particles.length; j++) {
+          let p2 = particles[j];
+          let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+          if(dist < 150) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(drawParticles);
+    }
+    
+    window.addEventListener('resize', initCanvas);
+    initCanvas();
+    drawParticles();
+
+    // Login Logic
+    function fillDemo(user, pass) {
+      document.getElementById('username').value = user;
+      document.getElementById('password').value = pass;
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      const btnText = document.getElementById('login-text');
+      const spinner = document.getElementById('login-spinner');
+      const errBox = document.getElementById('login-error');
+      
+      btnText.style.display = 'none';
+      spinner.style.display = 'inline-block';
+      errBox.style.display = 'none';
+      
+      try {
+        const res = await apiPost('/auth/login', { username: u, password: p });
+        if (!res || !res.token) {
+          throw new Error('Authentication succeeded but no token received.');
+        }
+        setAuth(res.token, res.user || { username: u, role: 'USER' });
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        errBox.textContent = err.message || 'Invalid username or password. Please verify database connection.';
+        errBox.style.display = 'block';
+      } finally {
+        btnText.style.display = 'inline-block';
+        spinner.style.display = 'none';
+      }
+    });
+    
+    // Auto-login if token exists
+    if (getToken()) {
+      window.location.href = 'dashboard.html';
+    }
+  </script>
+</body>
+</html>

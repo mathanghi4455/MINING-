@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Data - MineHaulOps</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div id="toast-container"></div>
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">ERP <span>Master Data</span></div>
+        <div class="header-right">
+          <button class="btn-logout">Logout</button>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('tab-contacts')">Contacts</button>
+          <button class="tab-btn" onclick="switchTab('tab-products')">Products & Services</button>
+          <button class="tab-btn" onclick="switchTab('tab-accounts')">Chart of Accounts</button>
+          <button class="tab-btn" onclick="switchTab('tab-journals')">Journals</button>
+        </div>
+
+        <!-- Contacts Tab -->
+        <div id="tab-contacts" class="tab-panel active">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Business Contacts (Customers & Vendors)</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-contact')">+ New Contact</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Contact Person</th><th>Email</th></tr></thead>
+                  <tbody id="table-contacts"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Products Tab -->
+        <div id="tab-products" class="tab-panel">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Products & Services Catalog</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-product')">+ New Product</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>SKU</th><th>Type</th><th>Name</th><th>UoM</th><th>Unit Price</th></tr></thead>
+                  <tbody id="table-products"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Accounts Tab -->
+        <div id="tab-accounts" class="tab-panel">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Chart of Accounts</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-account')">+ New Account</button>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>Code</th><th>Type</th><th>Name</th></tr></thead>
+                  <tbody id="table-accounts"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Journals Tab -->
+        <div id="tab-journals" class="tab-panel">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Financial Journals</div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-container">
+                <table>
+                  <thead><tr><th>ID</th><th>Type</th><th>Journal Name</th></tr></thead>
+                  <tbody id="table-journals"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <!-- Contact Modal -->
+  <div id="modal-contact" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Contact</div>
+        <button class="modal-close" onclick="closeModal('modal-contact')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-contact" onsubmit="saveContact(event)">
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select id="ct-type" class="form-control" required>
+              <option value="CUSTOMER">Customer</option>
+              <option value="VENDOR">Vendor</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Company Name</label>
+            <input type="text" id="ct-name" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contact Person</label>
+            <input type="text" id="ct-person" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" id="ct-email" class="form-control">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-contact')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product Modal -->
+  <div id="modal-product" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Product / Service</div>
+        <button class="modal-close" onclick="closeModal('modal-product')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-product" onsubmit="saveProduct(event)">
+          <div class="form-group">
+            <label class="form-label">SKU</label>
+            <input type="text" id="prod-sku" class="form-control" placeholder="e.g. PART-003" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Product Name</label>
+            <input type="text" id="prod-name" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select id="prod-type" class="form-control" required>
+              <option value="GOODS">GOODS</option>
+              <option value="SERVICE">SERVICE</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit of Measure</label>
+            <select id="prod-uom" class="form-control" required>
+              <option value="TON_KM">TON_KM</option>
+              <option value="SESSION">SESSION</option>
+              <option value="UNIT">UNIT</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit Price (₹)</label>
+            <input type="number" id="prod-price" class="form-control" step="0.01" required>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-product')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Modal -->
+  <div id="modal-account" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New GL Account</div>
+        <button class="modal-close" onclick="closeModal('modal-account')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-account" onsubmit="saveAccount(event)">
+          <div class="form-group">
+            <label class="form-label">Account Code</label>
+            <input type="text" id="acc-code" class="form-control" placeholder="e.g. 5200" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Name</label>
+            <input type="text" id="acc-name" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Type</label>
+            <select id="acc-type" class="form-control" required>
+              <option value="ASSET">ASSET</option>
+              <option value="LIABILITY">LIABILITY</option>
+              <option value="EQUITY">EQUITY</option>
+              <option value="INCOME">INCOME</option>
+              <option value="EXPENSE">EXPENSE</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modal-account')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to Database</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/api.js"></script>
+  <script>
+    requireAuth();
+    initSidebar('masters');
+    initLogout();
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+
+    async function loadData() {
+      try {
+        const [contacts, products, accounts, journals] = await Promise.all([
+          apiGet('/contacts').catch(() => []),
+          apiGet('/products').catch(() => []),
+          apiGet('/accounts').catch(() => []),
+          apiGet('/journals').catch(() => [])
+        ]);
+
+        const contactList = contacts || [];
+        const productList = products || [];
+        const accountList = accounts || [];
+        const journalList = journals || [];
+
+        // Contacts Table
+        const ctTbody = document.getElementById('table-contacts');
+        if (contactList.length === 0) {
+          ctTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No contacts found in database.</td></tr>';
+        } else {
+          ctTbody.innerHTML = contactList.map(c => `
+            <tr>
+              <td>${c.id}</td>
+              <td>${statusBadge(c.type)}</td>
+              <td><strong>${c.name}</strong></td>
+              <td>${c.contactPerson || '-'}</td>
+              <td>${c.email || '-'}</td>
+            </tr>
+          `).join('');
+        }
+
+        // Products Table
+        const prodTbody = document.getElementById('table-products');
+        if (productList.length === 0) {
+          prodTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No products found in database.</td></tr>';
+        } else {
+          prodTbody.innerHTML = productList.map(p => `
+            <tr>
+              <td><strong>${p.sku}</strong></td>
+              <td>${statusBadge(p.type)}</td>
+              <td>${p.name}</td>
+              <td>${p.unitOfMeasure}</td>
+              <td>${formatCurrency(p.unitPrice)}</td>
+            </tr>
+          `).join('');
+        }
+
+        // Accounts Table
+        const accTbody = document.getElementById('table-accounts');
+        if (accountList.length === 0) {
+          accTbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No accounts found in database.</td></tr>';
+        } else {
+          accTbody.innerHTML = accountList.map(a => `
+            <tr>
+              <td><strong>${a.code}</strong></td>
+              <td>${statusBadge(a.type)}</td>
+              <td>${a.name}</td>
+            </tr>
+          `).join('');
+        }
+
+        // Journals Table
+        const jrnTbody = document.getElementById('table-journals');
+        if (journalList.length === 0) {
+          jrnTbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No journals found in database.</td></tr>';
+        } else {
+          jrnTbody.innerHTML = journalList.map(j => `
+            <tr>
+              <td>${j.id}</td>
+              <td>${statusBadge(j.type)}</td>
+              <td><strong>${j.name}</strong></td>
+            </tr>
+          `).join('');
+        }
+
+      } catch(e) {
+        showToast('Failed to load master data from database', 'error');
+      }
+    }
+
+    async function saveContact(e) {
+      e.preventDefault();
+      const payload = {
+        type: document.getElementById('ct-type').value,
+        name: document.getElementById('ct-name').value,
+        contactPerson: document.getElementById('ct-person').value,
+        email: document.getElementById('ct-email').value,
+      };
+      try {
+        await apiPost('/contacts', payload);
+        closeModal('modal-contact');
+        document.getElementById('form-contact').reset();
+        showToast('Contact successfully saved to database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to save contact: ' + (err.message || 'Database error'), 'error');
+      }
+    }
+
+    async function saveProduct(e) {
+      e.preventDefault();
+      const payload = {
+        sku: document.getElementById('prod-sku').value,
+        name: document.getElementById('prod-name').value,
+        type: document.getElementById('prod-type').value,
+        unitOfMeasure: document.getElementById('prod-uom').value,
+        unitPrice: parseFloat(document.getElementById('prod-price').value),
+      };
+      try {
+        await apiPost('/products', payload);
+        closeModal('modal-product');
+        document.getElementById('form-product').reset();
+        showToast('Product successfully saved to database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to save product: ' + (err.message || 'Database error'), 'error');
+      }
+    }
+
+    async function saveAccount(e) {
+      e.preventDefault();
+      const payload = {
+        code: document.getElementById('acc-code').value,
+        name: document.getElementById('acc-name').value,
+        type: document.getElementById('acc-type').value,
+      };
+      try {
+        await apiPost('/accounts', payload);
+        closeModal('modal-account');
+        document.getElementById('form-account').reset();
+        showToast('GL Account successfully saved to database', 'success');
+        loadData();
+      } catch(err) {
+        showToast('Failed to save account: ' + (err.message || 'Database error'), 'error');
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
